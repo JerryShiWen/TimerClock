@@ -1,0 +1,1947 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimerClock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        dark: '#1F2937',
+                        light: '#F9FAFB'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .timer-shadow {
+                box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.1), 0 8px 10px -6px rgba(59, 130, 246, 0.1);
+            }
+            .glass-effect {
+                backdrop-filter: blur(10px);
+                background-color: rgba(255, 255, 255, 0.7);
+            }
+            .dark-glass {
+                backdrop-filter: blur(10px);
+                background-color: rgba(31, 41, 55, 0.7);
+            }
+            .animate-pulse-slow {
+                animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .notification-panel {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 1000;
+                width: 320px;
+                max-height: 80vh;
+                overflow-y: auto;
+            }
+            .notification-item {
+                animation: slideIn 0.3s ease-out;
+            }
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            .notification-item.exit {
+                animation: slideOut 0.3s ease-in forwards;
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+            .fullscreen-notification {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 2000;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                background-color: rgba(0,0,0,0.85);
+                animation: fadeIn 0.5s ease-out;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            .fullscreen-notification.exit {
+                animation: fadeOut 0.5s ease-in forwards;
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
+    <div class="flex flex-col min-h-screen">
+        <!-- 顶部导航栏 -->
+        <header class="sticky top-0 z-50 glass-effect dark:dark-glass border-b border-gray-200 dark:border-gray-700">
+            <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa fa-clock-o text-primary dark:text-blue-400 text-2xl"></i>
+                    <h1 class="text-xl font-bold text-gray-800 dark:text-white">TimerClock</h1>
+                </div>
+                
+                <div class="hidden md:flex items-center space-x-6">
+                    <button id="time-date-btn" class="text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors">
+                        <i class="fa fa-calendar-o mr-1"></i>
+                        <span id="current-time">--:--:--</span>
+                        <span class="mx-1">|</span>
+                        <span id="current-date">----年--月--日</span>
+                    </button>
+                    <button id="history-btn" class="text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors">
+                        <i class="fa fa-history mr-1"></i>历史
+                    </button>
+                    <!-- 新增通知和信息按钮 -->
+                    <button id="notifications-btn" class="text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors relative">
+                        <i class="fa fa-bell mr-1"></i>通知和信息
+                        <span id="notification-badge" class="absolute -top-1 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center hidden">0</span>
+                    </button>
+                    <button id="settings-btn" class="text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors">
+                        <i class="fa fa-cog mr-1"></i>设置
+                    </button>
+                    <button id="about-btn" class="text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors">
+                        <i class="fa fa-info-circle mr-1"></i>关于
+                    </button>
+                    <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                        <i class="fa fa-moon-o dark:hidden text-gray-700"></i>
+                        <i class="fa fa-sun-o hidden dark:inline-block text-yellow-400"></i>
+                    </button>
+                </div>
+                
+                <button id="mobile-menu-btn" class="md:hidden p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                    <i class="fa fa-bars text-gray-700 dark:text-gray-300"></i>
+                </button>
+            </div>
+            
+            <!-- 移动端菜单 -->
+            <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 dark:border-gray-700">
+                <div class="container mx-auto px-4 py-2 flex flex-col space-y-3">
+                    <button id="mobile-time-date-btn" class="text-left text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors py-2">
+                        <i class="fa fa-calendar-o mr-1"></i>
+                        <span id="mobile-current-time">--:--:--</span>
+                        <span class="mx-1">|</span>
+                        <span id="mobile-current-date">----年--月--日</span>
+                    </button>
+                    <button id="mobile-history-btn" class="text-left text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors py-2">
+                        <i class="fa fa-history mr-1"></i>历史记录
+                    </button>
+                    <!-- 新增移动端通知和信息按钮 -->
+                    <button id="mobile-notifications-btn" class="text-left text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors py-2 relative">
+                        <i class="fa fa-bell mr-1"></i>通知和信息
+                        <span id="mobile-notification-badge" class="absolute top-3 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center hidden">0</span>
+                    </button>
+                    <button id="mobile-settings-btn" class="text-left text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors py-2">
+                        <i class="fa fa-cog mr-1"></i>设置
+                    </button>
+                    <button id="mobile-about-btn" class="text-left text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors py-2">
+                        <i class="fa fa-info-circle mr-1"></i>关于
+                    </button>
+                    <button id="mobile-theme-toggle" class="text-left text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-blue-400 transition-colors py-2">
+                        <i class="fa fa-moon-o dark:hidden mr-1"></i>
+                        <i class="fa fa-sun-o hidden dark:inline-block mr-1 text-yellow-400"></i>
+                        <span class="dark:hidden">深色模式</span>
+                        <span class="hidden dark:inline-block">浅色模式</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <main class="flex-grow container mx-auto px-4 py-6">
+            <!-- 计时器类型选择 -->
+            <div class="mb-8">
+                <div class="flex flex-wrap justify-center gap-3 mb-6">
+                    <button id="timer-tab" class="timer-tab-btn bg-primary text-white px-5 py-2 rounded-full shadow-md hover:shadow-lg transition-all duration-300 flex items-center">
+                        <i class="fa fa-clock-o mr-2"></i>倒计时
+                    </button>
+                    <button id="stopwatch-tab" class="timer-tab-btn bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-5 py-2 rounded-full shadow-md hover:shadow-lg transition-all duration-300 flex items-center">
+                        <i class="fa fa-hourglass-half mr-2"></i>秒表
+                    </button>
+                    <button id="alarm-tab" class="timer-tab-btn bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-5 py-2 rounded-full shadow-md hover:shadow-lg transition-all duration-300 flex items-center">
+                        <i class="fa fa-bell-o mr-2"></i>闹钟
+                    </button>
+                    <button id="countdown-day-tab" class="timer-tab-btn bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-5 py-2 rounded-full shadow-md hover:shadow-lg transition-all duration-300 flex items-center">
+                        <i class="fa fa-calendar mr-2"></i>倒计日
+                    </button>
+                </div>
+                
+                <!-- 倒计时创建表单 -->
+                <div id="timer-create-form" class="timer-form bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 max-w-2xl mx-auto transform transition-all duration-500">
+                    <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center">
+                        <i class="fa fa-clock-o text-primary mr-2"></i>创建倒计时
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">小时</label>
+                            <input type="number" id="timer-hours" min="0" max="23" value="0" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white focus:border-primary transition-colors">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">分钟</label>
+                            <input type="number" id="timer-minutes" min="0" max="59" value="0" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white focus:border-primary transition-colors">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">秒</label>
+                            <input type="number" id="timer-seconds" min="0" max="59" value="0" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white focus:border-primary transition-colors">
+                        </div>
+                    </div>
+                    <div class="mt-4 space-y-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
+                        <input type="text" id="timer-name" placeholder="输入倒计时名称" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white focus:border-primary transition-colors">
+                    </div>
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button id="cancel-timer" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            取消
+                        </button>
+                        <button id="create-timer" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                            创建倒计时
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 秒表创建表单 -->
+                <div id="stopwatch-create-form" class="timer-form hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 max-w-2xl mx-auto transform transition-all duration-500">
+                    <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center">
+                        <i class="fa fa-hourglass-half text-primary mr-2"></i>创建秒表
+                    </h2>
+                    <div class="mt-4 space-y-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
+                        <input type="text" id="stopwatch-name" placeholder="输入秒表名称" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white focus:border-primary transition-colors">
+                    </div>
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button id="cancel-stopwatch" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            取消
+                        </button>
+                        <button id="create-stopwatch" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                            创建秒表
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 闹钟创建表单 -->
+                <div id="alarm-create-form" class="timer-form hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 max-w-2xl mx-auto transform transition-all duration-500">
+                    <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center">
+                        <i class="fa fa-bell-o text-primary mr-2"></i>设置闹钟
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">时间</label>
+                            <input type="time" id="alarm-time" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white focus:border-primary transition-colors">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
+                            <input type="text" id="alarm-name" placeholder="输入闹钟名称" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white focus:border-primary transition-colors">
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button id="cancel-alarm" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            取消
+                        </button>
+                        <button id="create-alarm" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                            设置闹钟
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 倒计日创建表单 -->
+                <div id="countdown-day-create-form" class="timer-form hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 max-w-2xl mx-auto transform transition-all duration-500">
+                    <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center">
+                        <i class="fa fa-calendar text-primary mr-2"></i>创建倒计日
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">日期</label>
+                            <input type="date" id="countdown-day-date" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white focus:border-primary transition-colors">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
+                            <input type="text" id="countdown-day-name" placeholder="输入事件名称" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white focus:border-primary transition-colors">
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button id="cancel-countdown-day" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            取消
+                        </button>
+                        <button id="create-countdown-day" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                            创建倒计日
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 计时器展示区 -->
+            <div id="timers-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 计时器卡片将动态添加到这里 -->
+                <div class="text-center text-gray-500 dark:text-gray-400 py-10 col-span-full">
+                    <i class="fa fa-clock-o text-5xl mb-4 opacity-30"></i>
+                    <p>还没有任何计时器</p>
+                    <p class="text-sm mt-2">创建一个新的计时器开始计时</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- 页脚 -->
+        <footer class="py-4 border-t border-gray-200 dark:border-gray-700 glass-effect dark:dark-glass">
+            <div class="container mx-auto px-4 text-center text-gray-500 dark:text-gray-400 text-sm">
+                <p>© 2025 TimerClock | 高效时间管理工具</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 通知面板（右上角） -->
+    <div id="notification-panel" class="notification-panel scrollbar-hide hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="font-bold text-gray-800 dark:text-white">通知</h3>
+                <button id="clear-notifications" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm">
+                    全部清除
+                </button>
+            </div>
+            <div id="notification-list" class="max-h-[60vh] overflow-y-auto">
+                <!-- 通知将动态添加到这里 -->
+                <div class="text-center text-gray-500 dark:text-gray-400 py-8">
+                    <i class="fa fa-bell-slash text-3xl mb-3 opacity-30"></i>
+                    <p>没有新通知</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 历史记录模态框 -->
+    <div id="history-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col transform transition-all duration-300 scale-95 opacity-0" id="history-modal-content">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800 dark:text-white">历史记录</h3>
+                <button id="close-history" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 overflow-y-auto scrollbar-hide flex-grow">
+                <div id="history-records" class="space-y-4">
+                    <!-- 历史记录将动态添加到这里 -->
+                    <div class="text-center text-gray-500 dark:text-gray-400 py-10">
+                        <i class="fa fa-history text-4xl mb-3 opacity-30"></i>
+                        <p>暂无历史记录</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                <button id="clear-history" class="px-4 py-2 bg-danger text-white rounded-lg hover:bg-danger/90 transition-colors">
+                    清空历史
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置模态框 -->
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full transform transition-all duration-300 scale-95 opacity-0" id="settings-modal-content">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800 dark:text-white">设置</h3>
+                <button id="close-settings" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-6">
+                <div>
+                    <h4 class="text-lg font-medium text-gray-800 dark:text-white mb-3">主题设置</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button id="theme-light" class="theme-btn py-3 rounded-lg border-2 border-gray-200 dark:border-gray-700 text-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <i class="fa fa-sun-o text-yellow-500 mb-1"></i>
+                            <p class="font-medium">浅色模式</p>
+                        </button>
+                        <button id="theme-dark" class="theme-btn py-3 rounded-lg border-2 border-gray-200 dark:border-gray-700 text-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <i class="fa fa-moon-o text-blue-400 mb-1"></i>
+                            <p class="font-medium">深色模式</p>
+                        </button>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="text-lg font-medium text-gray-800 dark:text-white mb-3">背景设置</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <button id="bg-default" class="bg-btn h-20 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 hover:opacity-80 transition-opacity"></button>
+                        <button id="bg-blue" class="bg-btn h-20 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900 dark:to-blue-800 hover:opacity-80 transition-opacity"></button>
+                        <button id="bg-green" class="bg-btn h-20 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900 dark:to-green-800 hover:opacity-80 transition-opacity"></button>
+                        <button id="bg-purple" class="bg-btn h-20 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900 dark:to-purple-800 hover:opacity-80 transition-opacity"></button>
+                        <button id="bg-red" class="bg-btn h-20 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900 dark:to-red-800 hover:opacity-80 transition-opacity"></button>
+                        <button id="bg-orange" class="bg-btn h-20 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900 dark:to-orange-800 hover:opacity-80 transition-opacity"></button>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="text-lg font-medium text-gray-800 dark:text-white mb-3">通知设置</h4>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <label class="text-gray-700 dark:text-gray-300">通知方式</label>
+                            <div class="flex space-x-2">
+                                <button id="notification-top-right" class="notification-type-btn px-4 py-2 bg-primary text-white rounded-lg">
+                                    右上角
+                                </button>
+                                <button id="notification-fullscreen" class="notification-type-btn px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg">
+                                    全屏
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-gray-700 dark:text-gray-300">自动保存计时器</label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="auto-save" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 dark:border-gray-700">
+                <button id="save-settings" class="w-full py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                    保存设置
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 关于模态框 -->
+    <div id="about-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full transform transition-all duration-300 scale-95 opacity-0" id="about-modal-content">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800 dark:text-white">关于TimerClock</h3>
+                <button id="close-about" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="text-center mb-4">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/20 text-primary mb-3">
+                        <i class="fa fa-clock-o text-3xl"></i>
+                    </div>
+                    <h4 class="text-xl font-bold text-gray-800 dark:text-white">TimerClock</h4>
+                    <p class="text-gray-600 dark:text-gray-400">版本 2.1.0</p>
+                </div>
+                
+                <p class="text-gray-600 dark:text-gray-400">
+                    TimerClock是一款功能强大的时间管理工具，支持倒计时、秒表、闹钟和倒计日功能。所有数据保存在本地，确保您的隐私和数据安全。
+                </p>
+                
+                <div class="space-y-2">
+                    <h5 class="font-medium text-gray-800 dark:text-white">功能特点：</h5>
+                    <ul class="list-disc list-inside text-gray-600 dark:text-gray-400 space-y-1">
+                        <li>创建多个独立的倒计时、秒表、闹钟和倒计日</li>
+                        <li>为每个计时器命名，方便管理</li>
+                        <li>本地保存计时器数据，随时继续使用</li>
+                        <li>查看计时器历史记录</li>
+                        <li>自定义主题和背景</li>
+                        <li>通知提醒功能</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+                <button id="author-btn" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                    作者
+                </button>
+                <button id="confirm-about" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                    确定
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 计时器窗口 -->
+    <div id="timer-window" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full transform transition-all duration-300 scale-95 opacity-0" id="timer-window-content">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 id="window-timer-name" class="text-xl font-bold text-gray-800 dark:text-white">计时器</h3>
+                <button id="close-timer-window" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 text-center">
+                <div id="window-timer-display" class="text-5xl font-bold text-gray-800 dark:text-white mb-6">00:00:00</div>
+                
+                <div class="flex justify-center space-x-3 mb-6">
+                    <button id="window-timer-start" class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                        <i class="fa fa-play mr-2"></i>开始
+                    </button>
+                    <button id="window-timer-pause" class="px-6 py-3 bg-warning text-white rounded-lg hover:bg-warning/90 transition-colors hidden">
+                        <i class="fa fa-pause mr-2"></i>暂停
+                    </button>
+                    <button id="window-timer-reset" class="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                        <i class="fa fa-refresh mr-2"></i>重置
+                    </button>
+                </div>
+                
+                <div class="flex justify-center space-x-3">
+                    <button id="window-timer-delete" class="px-4 py-2 bg-danger text-white rounded-lg hover:bg-danger/90 transition-colors">
+                        <i class="fa fa-trash-o mr-1"></i>删除
+                    </button>
+                    <button id="window-timer-minimize" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                        <i class="fa fa-window-minimize mr-1"></i>最小化
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知和信息窗口 -->
+    <div id="notifications-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col transform transition-all duration-300 scale-95 opacity-0" id="notifications-modal-content">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800 dark:text-white">通知和信息</h3>
+                <button id="close-notifications" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 overflow-y-auto scrollbar-hide flex-grow">
+                <div id="notifications-list" class="space-y-4">
+                    <!-- 通知将动态添加到这里 -->
+                    <div class="text-center text-gray-500 dark:text-gray-400 py-10">
+                        <i class="fa fa-bell-slash text-4xl mb-3 opacity-30"></i>
+                        <p>没有通知</p>
+                        <p class="text-sm mt-2">计时器结束时将显示通知</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                <button id="clear-all-notifications" class="px-4 py-2 bg-danger text-white rounded-lg hover:bg-danger/90 transition-colors">
+                    清除所有通知
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 计时器数据
+        let timers = [];
+        let history = [];
+        let notifications = [];
+        let currentTimerId = null;
+        let settings = {
+            theme: 'system',
+            background: 'default',
+            autoSave: true,
+            notificationType: 'top-right' // top-right 或 fullscreen
+        };
+        
+        // DOM元素
+        const timerTabBtn = document.getElementById('timer-tab');
+        const stopwatchTabBtn = document.getElementById('stopwatch-tab');
+        const alarmTabBtn = document.getElementById('alarm-tab');
+        const countdownDayTabBtn = document.getElementById('countdown-day-tab');
+        
+        const timerCreateForm = document.getElementById('timer-create-form');
+        const stopwatchCreateForm = document.getElementById('stopwatch-create-form');
+        const alarmCreateForm = document.getElementById('alarm-create-form');
+        const countdownDayCreateForm = document.getElementById('countdown-day-create-form');
+        
+        const timersContainer = document.getElementById('timers-container');
+        const historyRecords = document.getElementById('history-records');
+        const notificationsList = document.getElementById('notifications-list');
+        
+        // 模态框
+        const historyModal = document.getElementById('history-modal');
+        const historyModalContent = document.getElementById('history-modal-content');
+        const settingsModal = document.getElementById('settings-modal');
+        const settingsModalContent = document.getElementById('settings-modal-content');
+        const aboutModal = document.getElementById('about-modal');
+        const aboutModalContent = document.getElementById('about-modal-content');
+        const timerWindow = document.getElementById('timer-window');
+        const timerWindowContent = document.getElementById('timer-window-content');
+        const notificationsModal = document.getElementById('notifications-modal');
+        const notificationsModalContent = document.getElementById('notifications-modal-content');
+        const notificationPanel = document.getElementById('notification-panel');
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromLocalStorage();
+            updateTimersDisplay();
+            updateHistoryDisplay();
+            updateNotificationsDisplay();
+            updateDateTime();
+            setInterval(updateDateTime, 1000);
+            applySettings();
+            setupEventListeners();
+        });
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 标签切换
+            timerTabBtn.addEventListener('click', () => switchTab('timer'));
+            stopwatchTabBtn.addEventListener('click', () => switchTab('stopwatch'));
+            alarmTabBtn.addEventListener('click', () => switchTab('alarm'));
+            countdownDayTabBtn.addEventListener('click', () => switchTab('countdown-day'));
+            
+            // 表单提交
+            document.getElementById('create-timer').addEventListener('click', createTimer);
+            document.getElementById('cancel-timer').addEventListener('click', () => clearForm('timer'));
+            document.getElementById('create-stopwatch').addEventListener('click', createStopwatch);
+            document.getElementById('cancel-stopwatch').addEventListener('click', () => clearForm('stopwatch'));
+            document.getElementById('create-alarm').addEventListener('click', createAlarm);
+            document.getElementById('cancel-alarm').addEventListener('click', () => clearForm('alarm'));
+            document.getElementById('create-countdown-day').addEventListener('click', createCountdownDay);
+            document.getElementById('cancel-countdown-day').addEventListener('click', () => clearForm('countdown-day'));
+            
+            // 模态框控制
+            document.getElementById('history-btn').addEventListener('click', openHistoryModal);
+            document.getElementById('mobile-history-btn').addEventListener('click', openHistoryModal);
+            document.getElementById('close-history').addEventListener('click', closeHistoryModal);
+            document.getElementById('clear-history').addEventListener('click', clearHistory);
+            
+            document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
+            document.getElementById('mobile-settings-btn').addEventListener('click', openSettingsModal);
+            document.getElementById('close-settings').addEventListener('click', closeSettingsModal);
+            document.getElementById('save-settings').addEventListener('click', saveSettings);
+            
+            document.getElementById('about-btn').addEventListener('click', openAboutModal);
+            document.getElementById('mobile-about-btn').addEventListener('click', openAboutModal);
+            document.getElementById('close-about').addEventListener('click', closeAboutModal);
+            document.getElementById('confirm-about').addEventListener('click', closeAboutModal);
+            document.getElementById('author-btn').addEventListener('click', () => {
+                window.open('https://space.bilibili.com/3546730406611340', '_blank');
+            });
+            
+            // 通知控制
+            document.getElementById('notifications-btn').addEventListener('click', openNotificationsModal);
+            document.getElementById('mobile-notifications-btn').addEventListener('click', openNotificationsModal);
+            document.getElementById('close-notifications').addEventListener('click', closeNotificationsModal);
+            document.getElementById('clear-all-notifications').addEventListener('click', clearAllNotifications);
+            document.getElementById('clear-notifications').addEventListener('click', clearAllNotifications);
+            
+            // 主题切换
+            document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+            document.getElementById('mobile-theme-toggle').addEventListener('click', toggleTheme);
+            
+            // 移动端菜单
+            document.getElementById('mobile-menu-btn').addEventListener('click', toggleMobileMenu);
+            
+            // 设置中的主题和背景选择
+            document.getElementById('theme-light').addEventListener('click', () => setTheme('light'));
+            document.getElementById('theme-dark').addEventListener('click', () => setTheme('dark'));
+            document.getElementById('bg-default').addEventListener('click', () => setBackground('default'));
+            document.getElementById('bg-blue').addEventListener('click', () => setBackground('blue'));
+            document.getElementById('bg-green').addEventListener('click', () => setBackground('green'));
+            document.getElementById('bg-purple').addEventListener('click', () => setBackground('purple'));
+            document.getElementById('bg-red').addEventListener('click', () => setBackground('red'));
+            document.getElementById('bg-orange').addEventListener('click', () => setBackground('orange'));
+            
+            // 通知方式选择
+            document.getElementById('notification-top-right').addEventListener('click', () => setNotificationType('top-right'));
+            document.getElementById('notification-fullscreen').addEventListener('click', () => setNotificationType('fullscreen'));
+            
+            // 计时器窗口控制
+            document.getElementById('close-timer-window').addEventListener('click', closeTimerWindow);
+            document.getElementById('window-timer-start').addEventListener('click', startWindowTimer);
+            document.getElementById('window-timer-pause').addEventListener('click', pauseWindowTimer);
+            document.getElementById('window-timer-reset').addEventListener('click', resetWindowTimer);
+            document.getElementById('window-timer-delete').addEventListener('click', deleteWindowTimer);
+            document.getElementById('window-timer-minimize').addEventListener('click', minimizeWindowTimer);
+        }
+        
+        // 切换标签
+        function switchTab(tabName) {
+            // 重置所有标签按钮样式
+            [timerTabBtn, stopwatchTabBtn, alarmTabBtn, countdownDayTabBtn].forEach(btn => {
+                btn.classList.remove('bg-primary', 'text-white');
+                btn.classList.add('bg-white', 'dark:bg-gray-800', 'text-gray-700', 'dark:text-gray-300');
+            });
+            
+            // 设置当前标签按钮样式
+            const currentBtn = document.getElementById(`${tabName}-tab`);
+            currentBtn.classList.remove('bg-white', 'dark:bg-gray-800', 'text-gray-700', 'dark:text-gray-300');
+            currentBtn.classList.add('bg-primary', 'text-white');
+            
+            // 隐藏所有表单
+            [timerCreateForm, stopwatchCreateForm, alarmCreateForm, countdownDayCreateForm].forEach(form => {
+                form.classList.add('hidden');
+            });
+            
+            // 显示当前表单
+            const currentForm = document.getElementById(`${tabName}-create-form`);
+            currentForm.classList.remove('hidden');
+            
+            // 清除当前表单
+            clearForm(tabName);
+        }
+        
+        // 清除表单
+        function clearForm(formType) {
+            switch(formType) {
+                case 'timer':
+                    document.getElementById('timer-hours').value = '0';
+                    document.getElementById('timer-minutes').value = '0';
+                    document.getElementById('timer-seconds').value = '0';
+                    document.getElementById('timer-name').value = '';
+                    break;
+                case 'stopwatch':
+                    document.getElementById('stopwatch-name').value = '';
+                    break;
+                case 'alarm':
+                    document.getElementById('alarm-time').value = '';
+                    document.getElementById('alarm-name').value = '';
+                    break;
+                case 'countdown-day':
+                    document.getElementById('countdown-day-date').value = '';
+                    document.getElementById('countdown-day-name').value = '';
+                    break;
+            }
+        }
+        
+        // 创建倒计时
+        function createTimer() {
+            const hours = parseInt(document.getElementById('timer-hours').value) || 0;
+            const minutes = parseInt(document.getElementById('timer-minutes').value) || 0;
+            const seconds = parseInt(document.getElementById('timer-seconds').value) || 0;
+            const name = document.getElementById('timer-name').value || '倒计时';
+            
+            if (hours === 0 && minutes === 0 && seconds === 0) {
+                alert('请设置有效的时间!');
+                return;
+            }
+            
+            const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+            
+            const newTimer = {
+                id: Date.now().toString(),
+                type: 'timer',
+                name,
+                totalSeconds,
+                remainingSeconds: totalSeconds,
+                isRunning: false,
+                createdAt: new Date().toISOString()
+            };
+            
+            timers.push(newTimer);
+            updateTimersDisplay();
+            saveToLocalStorage();
+            clearForm('timer');
+            
+            // 自动打开计时器窗口
+            openTimerWindow(newTimer.id);
+        }
+        
+        // 创建秒表
+        function createStopwatch() {
+            const name = document.getElementById('stopwatch-name').value || '秒表';
+            
+            const newStopwatch = {
+                id: Date.now().toString(),
+                type: 'stopwatch',
+                name,
+                totalSeconds: 0,
+                isRunning: false,
+                createdAt: new Date().toISOString()
+            };
+            
+            timers.push(newStopwatch);
+            updateTimersDisplay();
+            saveToLocalStorage();
+            clearForm('stopwatch');
+            
+            // 自动打开计时器窗口
+            openTimerWindow(newStopwatch.id);
+        }
+        
+        // 创建闹钟
+        function createAlarm() {
+            const time = document.getElementById('alarm-time').value;
+            const name = document.getElementById('alarm-name').value || '闹钟';
+            
+            if (!time) {
+                alert('请选择有效的时间!');
+                return;
+            }
+            
+            const [hours, minutes] = time.split(':').map(Number);
+            const now = new Date();
+            const alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
+            
+            // 如果设置的时间已经过了，设置为明天
+            if (alarmDate <= now) {
+                alarmDate.setDate(alarmDate.getDate() + 1);
+            }
+            
+            const totalSeconds = Math.floor((alarmDate - now) / 1000);
+            
+            const newAlarm = {
+                id: Date.now().toString(),
+                type: 'alarm',
+                name,
+                totalSeconds,
+                remainingSeconds: totalSeconds,
+                isRunning: false,
+                alarmTime: alarmDate.toISOString(),
+                createdAt: new Date().toISOString()
+            };
+            
+            timers.push(newAlarm);
+            updateTimersDisplay();
+            saveToLocalStorage();
+            clearForm('alarm');
+            
+            // 自动打开计时器窗口
+            openTimerWindow(newAlarm.id);
+        }
+        
+        // 创建倒计日
+        function createCountdownDay() {
+            const date = document.getElementById('countdown-day-date').value;
+            const name = document.getElementById('countdown-day-name').value || '倒计日';
+            
+            if (!date) {
+                alert('请选择有效的日期!');
+                return;
+            }
+            
+            const targetDate = new Date(date);
+            const now = new Date();
+            
+            // 设置目标时间为当天的23:59:59
+            targetDate.setHours(23, 59, 59, 999);
+            
+            const timeDiff = targetDate - now;
+            if (timeDiff <= 0) {
+                alert('请选择未来的日期!');
+                return;
+            }
+            
+            const totalSeconds = Math.floor(timeDiff / 1000);
+            
+            const newCountdownDay = {
+                id: Date.now().toString(),
+                type: 'countdown-day',
+                name,
+                totalSeconds,
+                remainingSeconds: totalSeconds,
+                isRunning: false,
+                targetDate: targetDate.toISOString(),
+                createdAt: new Date().toISOString()
+            };
+            
+            timers.push(newCountdownDay);
+            updateTimersDisplay();
+            saveToLocalStorage();
+            clearForm('countdown-day');
+            
+            // 自动打开计时器窗口
+            openTimerWindow(newCountdownDay.id);
+        }
+        
+        // 更新计时器显示
+        function updateTimersDisplay() {
+            timersContainer.innerHTML = '';
+            
+            if (timers.length === 0) {
+                timersContainer.innerHTML = `
+                    <div class="text-center text-gray-500 dark:text-gray-400 py-10 col-span-full">
+                        <i class="fa fa-clock-o text-5xl mb-4 opacity-30"></i>
+                        <p>还没有任何计时器</p>
+                        <p class="text-sm mt-2">创建一个新的计时器开始计时</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            timers.forEach(timer => {
+                const card = document.createElement('div');
+                card.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5 transform transition-all duration-300 hover:shadow-xl timer-shadow';
+                
+                let timeDisplay = '';
+                let timerIcon = '';
+                
+                switch(timer.type) {
+                    case 'timer':
+                        timerIcon = 'fa-clock-o';
+                        timeDisplay = formatTime(timer.remainingSeconds);
+                        break;
+                    case 'stopwatch':
+                        timerIcon = 'fa-hourglass-half';
+                        timeDisplay = formatTime(timer.totalSeconds);
+                        break;
+                    case 'alarm':
+                        timerIcon = 'fa-bell-o';
+                        timeDisplay = formatTime(timer.remainingSeconds);
+                        break;
+                    case 'countdown-day':
+                        timerIcon = 'fa-calendar';
+                        const days = Math.floor(timer.remainingSeconds / (3600 * 24));
+                        timeDisplay = `${days} 天`;
+                        break;
+                }
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex items-center">
+                            <i class="fa ${timerIcon} text-primary mr-2"></i>
+                            <h3 class="font-bold text-gray-800 dark:text-white">${timer.name}</h3>
+                        </div>
+                        <div class="flex space-x-1">
+                            <button class="edit-timer p-1 text-gray-500 hover:text-primary transition-colors" data-id="${timer.id}">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="delete-timer p-1 text-gray-500 hover:text-danger transition-colors" data-id="${timer.id}">
+                                <i class="fa fa-trash-o"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-center mb-4">
+                        <div class="text-3xl font-bold text-gray-800 dark:text-white">${timeDisplay}</div>
+                    </div>
+                    <div class="flex justify-center space-x-2">
+                        <button class="start-timer px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors ${timer.isRunning ? 'hidden' : ''}" data-id="${timer.id}">
+                            <i class="fa fa-play mr-1"></i>开始
+                        </button>
+                        <button class="pause-timer px-3 py-1.5 bg-warning text-white rounded-lg hover:bg-warning/90 transition-colors ${!timer.isRunning ? 'hidden' : ''}" data-id="${timer.id}">
+                            <i class="fa fa-pause mr-1"></i>暂停
+                        </button>
+                        <button class="open-timer px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" data-id="${timer.id}">
+                            <i class="fa fa-expand mr-1"></i>打开
+                        </button>
+                    </div>
+                `;
+                
+                timersContainer.appendChild(card);
+                
+                // 添加事件监听器
+                card.querySelector('.start-timer').addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    startTimer(id);
+                });
+                
+                card.querySelector('.pause-timer').addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    pauseTimer(id);
+                });
+                
+                card.querySelector('.open-timer').addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    openTimerWindow(id);
+                });
+                
+                card.querySelector('.delete-timer').addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    deleteTimer(id);
+                });
+                
+                card.querySelector('.edit-timer').addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    editTimer(id);
+                });
+            });
+        }
+        
+        // 格式化时间
+        function formatTime(seconds) {
+            if (seconds < 0) seconds = 0;
+            
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // 开始计时器
+        function startTimer(id) {
+            const timer = timers.find(t => t.id === id);
+            if (!timer || timer.isRunning) return;
+            
+            timer.isRunning = true;
+            updateTimersDisplay();
+            saveToLocalStorage();
+            
+            if (timer.type === 'stopwatch') {
+                // 秒表逻辑
+                const startTime = Date.now() - (timer.totalSeconds * 1000);
+                
+                timer.interval = setInterval(() => {
+                    const now = Date.now();
+                    timer.totalSeconds = Math.floor((now - startTime) / 1000);
+                    
+                    if (id === currentTimerId) {
+                        document.getElementById('window-timer-display').textContent = formatTime(timer.totalSeconds);
+                    }
+                    
+                    updateTimersDisplay();
+                    saveToLocalStorage();
+                }, 1000);
+            } else {
+                // 倒计时和闹钟逻辑
+                timer.interval = setInterval(() => {
+                    timer.remainingSeconds--;
+                    
+                    if (timer.remainingSeconds <= 0) {
+                        clearInterval(timer.interval);
+                        timer.isRunning = false;
+                        
+                        // 添加到历史记录
+                        addToHistory(timer.name, timer.type, '完成');
+                        
+                        // 播放提示音
+                        playAlarmSound();
+                        
+                        // 显示通知
+                        showCustomNotification(timer.name, timer.type);
+                    }
+                    
+                    if (id === currentTimerId) {
+                        document.getElementById('window-timer-display').textContent = formatTime(timer.remainingSeconds);
+                    }
+                    
+                    updateTimersDisplay();
+                    saveToLocalStorage();
+                }, 1000);
+            }
+        }
+        
+        // 暂停计时器
+        function pauseTimer(id) {
+            const timer = timers.find(t => t.id === id);
+            if (!timer || !timer.isRunning) return;
+            
+            clearInterval(timer.interval);
+            timer.isRunning = false;
+            updateTimersDisplay();
+            saveToLocalStorage();
+        }
+        
+        // 打开计时器窗口
+        function openTimerWindow(id) {
+            const timer = timers.find(t => t.id === id);
+            if (!timer) return;
+            
+            currentTimerId = id;
+            
+            document.getElementById('window-timer-name').textContent = timer.name;
+            
+            if (timer.type === 'stopwatch') {
+                document.getElementById('window-timer-display').textContent = formatTime(timer.totalSeconds);
+            } else {
+                document.getElementById('window-timer-display').textContent = formatTime(timer.remainingSeconds);
+            }
+            
+            // 更新按钮状态
+            if (timer.isRunning) {
+                document.getElementById('window-timer-start').classList.add('hidden');
+                document.getElementById('window-timer-pause').classList.remove('hidden');
+            } else {
+                document.getElementById('window-timer-start').classList.remove('hidden');
+                document.getElementById('window-timer-pause').classList.add('hidden');
+            }
+            
+            // 显示窗口
+            timerWindow.classList.remove('hidden');
+            setTimeout(() => {
+                timerWindowContent.classList.remove('scale-95', 'opacity-0');
+                timerWindowContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+        
+        // 关闭计时器窗口
+        function closeTimerWindow() {
+            timerWindowContent.classList.remove('scale-100', 'opacity-100');
+            timerWindowContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                timerWindow.classList.add('hidden');
+                currentTimerId = null;
+            }, 300);
+        }
+        
+        // 开始窗口中的计时器
+        function startWindowTimer() {
+            if (!currentTimerId) return;
+            startTimer(currentTimerId);
+        }
+        
+        // 暂停窗口中的计时器
+        function pauseWindowTimer() {
+            if (!currentTimerId) return;
+            pauseTimer(currentTimerId);
+        }
+        
+        // 重置窗口中的计时器
+        function resetWindowTimer() {
+            if (!currentTimerId) return;
+            
+            const timer = timers.find(t => t.id === currentTimerId);
+            if (!timer) return;
+            
+            // 先暂停计时器
+            if (timer.isRunning) {
+                pauseTimer(currentTimerId);
+            }
+            
+            // 重置时间
+            if (timer.type === 'stopwatch') {
+                timer.totalSeconds = 0;
+            } else {
+                timer.remainingSeconds = timer.totalSeconds;
+            }
+            
+            // 更新显示
+            if (timer.type === 'stopwatch') {
+                document.getElementById('window-timer-display').textContent = formatTime(timer.totalSeconds);
+            } else {
+                document.getElementById('window-timer-display').textContent = formatTime(timer.remainingSeconds);
+            }
+            
+            updateTimersDisplay();
+            saveToLocalStorage();
+        }
+        
+        // 删除窗口中的计时器
+        function deleteWindowTimer() {
+            if (!currentTimerId) return;
+            
+            if (confirm('确定要删除这个计时器吗？')) {
+                deleteTimer(currentTimerId);
+                closeTimerWindow();
+            }
+        }
+        
+        // 最小化窗口中的计时器
+        function minimizeWindowTimer() {
+            closeTimerWindow();
+        }
+        
+        // 删除计时器
+        function deleteTimer(id) {
+            const timerIndex = timers.findIndex(t => t.id === id);
+            if (timerIndex === -1) return;
+            
+            // 先暂停计时器
+            const timer = timers[timerIndex];
+            if (timer.isRunning) {
+                clearInterval(timer.interval);
+            }
+            
+            // 添加到历史记录
+            addToHistory(timer.name, timer.type, '已删除');
+            
+            // 从数组中删除
+            timers.splice(timerIndex, 1);
+            
+            // 更新显示
+            updateTimersDisplay();
+            saveToLocalStorage();
+        }
+        
+        // 编辑计时器
+        function editTimer(id) {
+            const timer = timers.find(t => t.id === id);
+            if (!timer) return;
+            
+            // 先暂停计时器
+            if (timer.isRunning) {
+                pauseTimer(id);
+            }
+            
+            // 根据计时器类型显示相应的表单
+            switch(timer.type) {
+                case 'timer':
+                    switchTab('timer');
+                    document.getElementById('timer-hours').value = Math.floor(timer.totalSeconds / 3600);
+                    document.getElementById('timer-minutes').value = Math.floor((timer.totalSeconds % 3600) / 60);
+                    document.getElementById('timer-seconds').value = timer.totalSeconds % 60;
+                    document.getElementById('timer-name').value = timer.name;
+                    break;
+                case 'stopwatch':
+                    switchTab('stopwatch');
+                    document.getElementById('stopwatch-name').value = timer.name;
+                    break;
+                case 'alarm':
+                    switchTab('alarm');
+                    const alarmDate = new Date(timer.alarmTime);
+                    const hours = alarmDate.getHours().toString().padStart(2, '0');
+                    const minutes = alarmDate.getMinutes().toString().padStart(2, '0');
+                    document.getElementById('alarm-time').value = `${hours}:${minutes}`;
+                    document.getElementById('alarm-name').value = timer.name;
+                    break;
+                case 'countdown-day':
+                    switchTab('countdown-day');
+                    const targetDate = new Date(timer.targetDate);
+                    const dateString = targetDate.toISOString().split('T')[0];
+                    document.getElementById('countdown-day-date').value = dateString;
+                    document.getElementById('countdown-day-name').value = timer.name;
+                    break;
+            }
+            
+            // 删除旧的计时器
+            deleteTimer(id);
+        }
+        
+        // 添加到历史记录
+        function addToHistory(name, type, status) {
+            const historyItem = {
+                id: Date.now().toString(),
+                name,
+                type,
+                status,
+                time: new Date().toISOString()
+            };
+            
+            history.unshift(historyItem); // 添加到数组开头
+            
+            // 限制历史记录数量
+            if (history.length > 50) {
+                history.pop();
+            }
+            
+            updateHistoryDisplay();
+            saveToLocalStorage();
+        }
+        
+        // 更新历史记录显示
+        function updateHistoryDisplay() {
+            historyRecords.innerHTML = '';
+            
+            if (history.length === 0) {
+                historyRecords.innerHTML = `
+                    <div class="text-center text-gray-500 dark:text-gray-400 py-10">
+                        <i class="fa fa-history text-4xl mb-3 opacity-30"></i>
+                        <p>暂无历史记录</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            history.forEach(item => {
+                const record = document.createElement('div');
+                record.className = 'bg-white dark:bg-gray-800 rounded-lg p-4 hover:shadow-md transition-shadow';
+                
+                let typeIcon = '';
+                let statusClass = '';
+                
+                switch(item.type) {
+                    case 'timer':
+                        typeIcon = 'fa-clock-o';
+                        break;
+                    case 'stopwatch':
+                        typeIcon = 'fa-hourglass-half';
+                        break;
+                    case 'alarm':
+                        typeIcon = 'fa-bell-o';
+                        break;
+                    case 'countdown-day':
+                        typeIcon = 'fa-calendar';
+                        break;
+                }
+                
+                switch(item.status) {
+                    case '完成':
+                        statusClass = 'text-green-500';
+                        break;
+                    case '已删除':
+                        statusClass = 'text-gray-500';
+                        break;
+                }
+                
+                const time = new Date(item.time);
+                const timeString = time.toLocaleString();
+                
+                record.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <i class="fa ${typeIcon} text-primary mr-2"></i>
+                            <span class="font-medium text-gray-800 dark:text-white">${item.name}</span>
+                        </div>
+                        <span class="text-sm ${statusClass}">${item.status}</span>
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        ${timeString}
+                    </div>
+                `;
+                
+                historyRecords.appendChild(record);
+            });
+        }
+        
+        // 清空历史记录
+        function clearHistory() {
+            if (confirm('确定要清空所有历史记录吗？')) {
+                history = [];
+                updateHistoryDisplay();
+                saveToLocalStorage();
+            }
+        }
+        
+        // 打开历史记录模态框
+        function openHistoryModal() {
+            historyModal.classList.remove('hidden');
+            setTimeout(() => {
+                historyModalContent.classList.remove('scale-95', 'opacity-0');
+                historyModalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+        
+        // 关闭历史记录模态框
+        function closeHistoryModal() {
+            historyModalContent.classList.remove('scale-100', 'opacity-100');
+            historyModalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                historyModal.classList.add('hidden');
+            }, 300);
+        }
+        
+        // 添加通知
+        function addNotification(name, type) {
+            const notification = {
+                id: Date.now().toString(),
+                name,
+                type,
+                time: new Date().toISOString(),
+                read: false
+            };
+            
+            notifications.unshift(notification); // 添加到数组开头
+            
+            // 限制通知数量
+            if (notifications.length > 50) {
+                notifications.pop();
+            }
+            
+            // 更新通知显示
+            updateNotificationsDisplay();
+            
+            // 更新通知徽章
+            updateNotificationBadge();
+            
+            // 保存到本地存储
+            saveToLocalStorage();
+            
+            // 显示通知
+            showCustomNotification(name, type);
+        }
+        
+        // 更新通知显示
+        function updateNotificationsDisplay() {
+            notificationsList.innerHTML = '';
+            
+            if (notifications.length === 0) {
+                notificationsList.innerHTML = `
+                    <div class="text-center text-gray-500 dark:text-gray-400 py-10">
+                        <i class="fa fa-bell-slash text-4xl mb-3 opacity-30"></i>
+                        <p>没有通知</p>
+                        <p class="text-sm mt-2">计时器结束时将显示通知</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            notifications.forEach(notification => {
+                const notif = document.createElement('div');
+                notif.className = `bg-white dark:bg-gray-800 rounded-lg p-4 hover:shadow-md transition-shadow ${notification.read ? '' : 'border-l-4 border-primary'}`;
+                
+                let typeIcon = '';
+                let typeText = '';
+                
+                switch(notification.type) {
+                    case 'timer':
+                        typeIcon = 'fa-clock-o';
+                        typeText = '倒计时';
+                        break;
+                    case 'stopwatch':
+                        typeIcon = 'fa-hourglass-half';
+                        typeText = '秒表';
+                        break;
+                    case 'alarm':
+                        typeIcon = 'fa-bell-o';
+                        typeText = '闹钟';
+                        break;
+                    case 'countdown-day':
+                        typeIcon = 'fa-calendar';
+                        typeText = '倒计日';
+                        break;
+                }
+                
+                const time = new Date(notification.time);
+                const timeString = time.toLocaleString();
+                
+                notif.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="flex items-center">
+                                <i class="fa ${typeIcon} text-primary mr-2"></i>
+                                <span class="font-medium text-gray-800 dark:text-white">${notification.name}</span>
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">${typeText}</span>
+                                <span class="ml-2">${timeString}</span>
+                            </div>
+                        </div>
+                        <button class="delete-notification text-gray-400 hover:text-danger transition-colors" data-id="${notification.id}">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                
+                notificationsList.appendChild(notif);
+                
+                // 添加事件监听器
+                notif.querySelector('.delete-notification').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = e.currentTarget.getAttribute('data-id');
+                    deleteNotification(id);
+                });
+                
+                // 标记为已读
+                notif.addEventListener('click', () => {
+                    notification.read = true;
+                    updateNotificationsDisplay();
+                    saveToLocalStorage();
+                    updateNotificationBadge();
+                });
+            });
+        }
+        
+        // 删除通知
+        function deleteNotification(id) {
+            const index = notifications.findIndex(n => n.id === id);
+            if (index !== -1) {
+                notifications.splice(index, 1);
+                updateNotificationsDisplay();
+                updateNotificationBadge();
+                saveToLocalStorage();
+            }
+        }
+        
+        // 清除所有通知
+        function clearAllNotifications() {
+            if (confirm('确定要清除所有通知吗？')) {
+                notifications = [];
+                updateNotificationsDisplay();
+                updateNotificationBadge();
+                saveToLocalStorage();
+            }
+        }
+        
+        // 更新通知徽章
+        function updateNotificationBadge() {
+            const unreadCount = notifications.filter(n => !n.read).length;
+            const badge = document.getElementById('notification-badge');
+            const mobileBadge = document.getElementById('mobile-notification-badge');
+            
+            if (unreadCount > 0) {
+                badge.textContent = unreadCount;
+                badge.classList.remove('hidden');
+                mobileBadge.textContent = unreadCount;
+                mobileBadge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+                mobileBadge.classList.add('hidden');
+            }
+        }
+        
+        // 打开通知窗口
+        function openNotificationsModal() {
+            notificationsModal.classList.remove('hidden');
+            setTimeout(() => {
+                notificationsModalContent.classList.remove('scale-95', 'opacity-0');
+                notificationsModalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+            
+            // 标记所有通知为已读
+            notifications.forEach(n => n.read = true);
+            updateNotificationBadge();
+            saveToLocalStorage();
+        }
+        
+        // 关闭通知窗口
+        function closeNotificationsModal() {
+            notificationsModalContent.classList.remove('scale-100', 'opacity-100');
+            notificationsModalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                notificationsModal.classList.add('hidden');
+            }, 300);
+        }
+        
+        // 显示自定义通知
+        function showCustomNotification(name, type) {
+            const notification = {
+                id: Date.now().toString(),
+                name,
+                type,
+                time: new Date().toISOString()
+            };
+            
+            // 根据设置显示不同类型的通知
+            if (settings.notificationType === 'top-right') {
+                showTopRightNotification(notification);
+            } else {
+                showFullscreenNotification(notification);
+            }
+        }
+        
+        // 显示右上角通知
+        function showTopRightNotification(notification) {
+            // 确保通知面板可见
+            notificationPanel.classList.remove('hidden');
+            
+            const notifItem = document.createElement('div');
+            notifItem.className = 'notification-item bg-white dark:bg-gray-800 rounded-lg p-4 mb-3 shadow-lg cursor-pointer';
+            notifItem.dataset.id = notification.id;
+            
+            let typeIcon = '';
+            let typeText = '';
+            
+            switch(notification.type) {
+                case 'timer':
+                    typeIcon = 'fa-clock-o';
+                    typeText = '倒计时';
+                    break;
+                case 'stopwatch':
+                    typeIcon = 'fa-hourglass-half';
+                    typeText = '秒表';
+                    break;
+                case 'alarm':
+                    typeIcon = 'fa-bell-o';
+                    typeText = '闹钟';
+                    break;
+                case 'countdown-day':
+                    typeIcon = 'fa-calendar';
+                    typeText = '倒计日';
+                    break;
+            }
+            
+            const time = new Date();
+            const timeString = time.toLocaleTimeString();
+            
+            notifItem.innerHTML = `
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <i class="fa ${typeIcon}"></i>
+                        </div>
+                    </div>
+                    <div class="ml-3 flex-1">
+                        <p class="text-sm font-medium text-gray-900 dark:text-white">${notification.name}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${typeText} - ${timeString}</p>
+                    </div>
+                    <button class="close-notification text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 ml-2">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            // 添加到通知面板的开头
+            const notificationList = document.getElementById('notification-list');
+            if (notificationList.children.length > 0 && 
+                notificationList.children[0].classList.contains('text-center')) {
+                notificationList.innerHTML = '';
+            }
+            notificationList.insertBefore(notifItem, notificationList.firstChild);
+            
+            // 添加事件监听器
+            notifItem.querySelector('.close-notification').addEventListener('click', (e) => {
+                e.stopPropagation();
+                notifItem.classList.add('exit');
+                setTimeout(() => {
+                    notifItem.remove();
+                    if (document.getElementById('notification-list').children.length === 0) {
+                        notificationList.innerHTML = `
+                            <div class="text-center text-gray-500 dark:text-gray-400 py-8">
+                                <i class="fa fa-bell-slash text-3xl mb-3 opacity-30"></i>
+                                <p>没有新通知</p>
+                            </div>
+                        `;
+                    }
+                }, 300);
+            });
+            
+            // 点击通知
+            notifItem.addEventListener('click', () => {
+                addNotification(notification.name, notification.type);
+                notifItem.remove();
+                if (document.getElementById('notification-list').children.length === 0) {
+                    notificationList.innerHTML = `
+                        <div class="text-center text-gray-500 dark:text-gray-400 py-8">
+                            <i class="fa fa-bell-slash text-3xl mb-3 opacity-30"></i>
+                            <p>没有新通知</p>
+                        </div>
+                    `;
+                }
+            });
+            
+            // 自动移除通知
+            setTimeout(() => {
+                if (notifItem.parentNode) {
+                    notifItem.classList.add('exit');
+                    setTimeout(() => {
+                        notifItem.remove();
+                        if (document.getElementById('notification-list').children.length === 0) {
+                            notificationList.innerHTML = `
+                                <div class="text-center text-gray-500 dark:text-gray-400 py-8">
+                                    <i class="fa fa-bell-slash text-3xl mb-3 opacity-30"></i>
+                                    <p>没有新通知</p>
+                                </div>
+                            `;
+                        }
+                    }, 300);
+                }
+            }, 5000);
+        }
+        
+        // 显示全屏通知
+        function showFullscreenNotification(notification) {
+            const fullscreenNotif = document.createElement('div');
+            fullscreenNotif.className = 'fullscreen-notification';
+            fullscreenNotif.dataset.id = notification.id;
+            
+            let typeIcon = '';
+            let typeText = '';
+            
+            switch(notification.type) {
+                case 'timer':
+                    typeIcon = 'fa-clock-o';
+                    typeText = '倒计时';
+                    break;
+                case 'stopwatch':
+                    typeIcon = 'fa-hourglass-half';
+                    typeText = '秒表';
+                    break;
+                case 'alarm':
+                    typeIcon = 'fa-bell-o';
+                    typeText = '闹钟';
+                    break;
+                case 'countdown-day':
+                    typeIcon = 'fa-calendar';
+                    typeText = '倒计日';
+                    break;
+            }
+            
+            fullscreenNotif.innerHTML = `
+                <div class="text-center text-white p-8 max-w-md">
+                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/10 mb-6">
+                        <i class="fa ${typeIcon} text-white text-3xl"></i>
+                    </div>
+                    <h2 class="text-3xl font-bold mb-2">${notification.name}</h2>
+                    <p class="text-xl mb-8">${typeText} 时间到!</p>
+                    <div class="flex justify-center">
+                        <button id="dismiss-notification" class="px-6 py-3 bg-white text-gray-800 rounded-lg font-medium hover:bg-gray-100 transition-colors">
+                            关闭
+                        </button>
+                        <button id="save-notification" class="px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 ml-4 transition-colors">
+                            保存通知
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(fullscreenNotif);
+            
+            // 添加事件监听器
+            fullscreenNotif.querySelector('#dismiss-notification').addEventListener('click', () => {
+                fullscreenNotif.classList.add('exit');
+                setTimeout(() => {
+                    fullscreenNotif.remove();
+                }, 500);
+            });
+            
+            fullscreenNotif.querySelector('#save-notification').addEventListener('click', () => {
+                addNotification(notification.name, notification.type);
+                fullscreenNotif.classList.add('exit');
+                setTimeout(() => {
+                    fullscreenNotif.remove();
+                }, 500);
+            });
+        }
+        
+        // 打开设置模态框
+        function openSettingsModal() {
+            // 设置当前选中的主题
+            if (settings.theme === 'light') {
+                document.getElementById('theme-light').classList.add('border-primary');
+                document.getElementById('theme-dark').classList.remove('border-primary');
+            } else {
+                document.getElementById('theme-light').classList.remove('border-primary');
+                document.getElementById('theme-dark').classList.add('border-primary');
+            }
+            
+            // 设置当前选中的背景
+            document.querySelectorAll('.bg-btn').forEach(btn => {
+                btn.classList.remove('border-primary');
+            });
+            document.getElementById(`bg-${settings.background}`).classList.add('border-primary');
+            
+            // 设置通知方式
+            document.querySelectorAll('.notification-type-btn').forEach(btn => {
+                btn.classList.remove('bg-primary', 'text-white');
+                btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'text-gray-700', 'dark:text-gray-300');
+            });
+            document.getElementById(`notification-${settings.notificationType}`).classList.remove('bg-gray-200', 'dark:bg-gray-700', 'text-gray-700', 'dark:text-gray-300');
+            document.getElementById(`notification-${settings.notificationType}`).classList.add('bg-primary', 'text-white');
+            
+            // 设置自动保存选项
+            document.getElementById('auto-save').checked = settings.autoSave;
+            
+            settingsModal.classList.remove('hidden');
+            setTimeout(() => {
+                settingsModalContent.classList.remove('scale-95', 'opacity-0');
+                settingsModalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+        
+        // 关闭设置模态框
+        function closeSettingsModal() {
+            settingsModalContent.classList.remove('scale-100', 'opacity-100');
+            settingsModalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                settingsModal.classList.add('hidden');
+            }, 300);
+        }
+        
+        // 保存设置
+        function saveSettings() {
+            saveToLocalStorage();
+            applySettings();
+            closeSettingsModal();
+        }
+        
+        // 设置主题
+        function setTheme(theme) {
+            settings.theme = theme;
+            
+            // 更新UI
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.remove('border-primary');
+            });
+            document.getElementById(`theme-${theme}`).classList.add('border-primary');
+        }
+        
+        // 设置背景
+        function setBackground(background) {
+            settings.background = background;
+            
+            // 更新UI
+            document.querySelectorAll('.bg-btn').forEach(btn => {
+                btn.classList.remove('border-primary');
+            });
+            document.getElementById(`bg-${background}`).classList.add('border-primary');
+        }
+        
+        // 设置通知类型
+        function setNotificationType(type) {
+            settings.notificationType = type;
+            
+            // 更新UI
+            document.querySelectorAll('.notification-type-btn').forEach(btn => {
+                btn.classList.remove('bg-primary', 'text-white');
+                btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'text-gray-700', 'dark:text-gray-300');
+            });
+            document.getElementById(`notification-${type}`).classList.remove('bg-gray-200', 'dark:bg-gray-700', 'text-gray-700', 'dark:text-gray-300');
+            document.getElementById(`notification-${type}`).classList.add('bg-primary', 'text-white');
+        }
+        
+        // 切换主题
+        function toggleTheme() {
+            settings.theme = settings.theme === 'light' ? 'dark' : 'light';
+            applySettings();
+            saveToLocalStorage();
+        }
+        
+        // 应用设置
+        function applySettings() {
+            // 应用主题
+            if (settings.theme === 'light' || (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+                document.documentElement.classList.remove('dark');
+            } else {
+                document.documentElement.classList.add('dark');
+            }
+            
+            // 应用背景
+            const body = document.body;
+            body.classList.remove(
+                'bg-gradient-to-br', 'from-blue-50', 'to-indigo-50', 
+                'from-blue-50', 'to-blue-100', 
+                'from-green-50', 'to-green-100', 
+                'from-purple-50', 'to-purple-100', 
+                'from-red-50', 'to-red-100', 
+                'from-orange-50', 'to-orange-100',
+                'dark:from-gray-900', 'dark:to-gray-800',
+                'dark:from-blue-900', 'dark:to-blue-800',
+                'dark:from-green-900', 'dark:to-green-800',
+                'dark:from-purple-900', 'dark:to-purple-800',
+                'dark:from-red-900', 'dark:to-red-800',
+                'dark:from-orange-900', 'dark:to-orange-800'
+            );
+            
+            switch(settings.background) {
+                case 'default':
+                    body.classList.add('bg-gradient-to-br', 'from-blue-50', 'to-indigo-50', 'dark:from-gray-900', 'dark:to-gray-800');
+                    break;
+                case 'blue':
+                    body.classList.add('bg-gradient-to-br', 'from-blue-50', 'to-blue-100', 'dark:from-blue-900', 'dark:to-blue-800');
+                    break;
+                case 'green':
+                    body.classList.add('bg-gradient-to-br', 'from-green-50', 'to-green-100', 'dark:from-green-900', 'dark:to-green-800');
+                    break;
+                case 'purple':
+                    body.classList.add('bg-gradient-to-br', 'from-purple-50', 'to-purple-100', 'dark:from-purple-900', 'dark:to-purple-800');
+                    break;
+                case 'red':
+                    body.classList.add('bg-gradient-to-br', 'from-red-50', 'to-red-100', 'dark:from-red-900', 'dark:to-red-800');
+                    break;
+                case 'orange':
+                    body.classList.add('bg-gradient-to-br', 'from-orange-50', 'to-orange-100', 'dark:from-orange-900', 'dark:to-orange-800');
+                    break;
+            }
+            
+            // 应用自动保存设置
+            settings.autoSave = document.getElementById('auto-save').checked;
+        }
+        
+        // 切换移动端菜单
+        function toggleMobileMenu() {
+            const mobileMenu = document.getElementById('mobile-menu');
+            mobileMenu.classList.toggle('hidden');
+        }
+        
+        // 打开关于模态框
+        function openAboutModal() {
+            aboutModal.classList.remove('hidden');
+            setTimeout(() => {
+                aboutModalContent.classList.remove('scale-95', 'opacity-0');
+                aboutModalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+        
+        // 关闭关于模态框
+        function closeAboutModal() {
+            aboutModalContent.classList.remove('scale-100', 'opacity-100');
+            aboutModalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                aboutModal.classList.add('hidden');
+            }, 300);
+        }
+        
+        // 更新日期时间显示
+        function updateDateTime() {
+            const now = new Date();
+            
+            // 格式化时间
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const seconds = now.getSeconds().toString().padStart(2, '0');
+            const timeString = `${hours}:${minutes}:${seconds}`;
+            
+            // 格式化日期
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const date = now.getDate().toString().padStart(2, '0');
+            const dateString = `${year}年${month}月${date}日`;
+            
+            // 更新UI
+            document.getElementById('current-time').textContent = timeString;
+            document.getElementById('current-date').textContent = dateString;
+            document.getElementById('mobile-current-time').textContent = timeString;
+            document.getElementById('mobile-current-date').textContent = dateString;
+        }
+        
+        // 保存数据到本地存储
+        function saveToLocalStorage() {
+            if (!settings.autoSave) return;
+            
+            const data = {
+                timers: timers.map(timer => {
+                    // 不要保存interval
+                    return {
+                        ...timer,
+                        interval: undefined
+                    };
+                }),
+                history,
+                notifications,
+                settings
+            };
+            
+            localStorage.setItem('timerAppData', JSON.stringify(data));
+        }
+        
+        // 从本地存储加载数据
+        function loadFromLocalStorage() {
+            const data = localStorage.getItem('timerAppData');
+            if (!data) return;
+            
+            try {
+                const parsedData = JSON.parse(data);
+                
+                if (parsedData.timers) {
+                    timers = parsedData.timers;
+                    
+                    // 清除所有interval
+                    timers.forEach(timer => {
+                        timer.interval = undefined;
+                    });
+                }
+                
+                if (parsedData.history) {
+                    history = parsedData.history;
+                }
+                
+                if (parsedData.notifications) {
+                    notifications = parsedData.notifications;
+                    updateNotificationBadge();
+                }
+                
+                if (parsedData.settings) {
+                    settings = parsedData.settings;
+                }
+            } catch (e) {
+                console.error('Failed to load data from localStorage:', e);
+            }
+        }
+        
+        // 播放提示音
+        function playAlarmSound() {
+            // 简单的提示音实现
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // 440 Hz (A4)
+            oscillator.frequency.exponentialRampToValueAtTime(
+                880, audioCtx.currentTime + 0.5
+            ); // 升至880 Hz (A5)
+            
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.05);
+            gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.5);
+        }
+    </script>
+</body>
+</html>
